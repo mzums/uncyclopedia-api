@@ -49,6 +49,9 @@ def get_featured_article_data(soup: BeautifulSoup) -> Dict:
                     else:
                         description += text
     
+    if description.endswith(" (Full article...)"):
+        description = description.removesuffix(" (Full article...)").strip()
+    
     description = description.replace('\n\n', '\n')
 
     return {
@@ -77,7 +80,7 @@ def get_did_you_know_facts(soup: BeautifulSoup) -> Dict[str, List[List[str]]]:
 
     extracted_facts = []
     for item in list_items:
-        fact_text = item.get_text(strip=True)
+        fact_text = item.get_text()
         extracted_facts.append(fact_text)
 
     image_element = did_you_know_content.select_one('img')
@@ -106,18 +109,46 @@ def get_news_data(soup: BeautifulSoup) -> Dict[str, List[List[str]]]:
         print("Error: Could not find the content div for 'In the news' section.")
         return {}
     
-    content_items = news_content.find_all(['li', 'p'])
-    extracted_content = [item.get_text(strip=True) for item in content_items]
+    news = news_content.find_all('li')
+    news = [item.get_text().split('\n')[0] for item in news]
+
+    ongoing = None
+    recent_deaths = None
+    upcoming_deaths = None
+    for i in news_content.find_all('p'):
+        text = i.get_text()
+        text_list = text.split(sep=" ")
+        if text_list[0] == "Ongoing:":
+            text_list1 = text_list[1:]
+        else:
+            text_list1 = text_list[2:]
+        text = " ".join(text_list1)
+        text_list2 = text.split(sep=" • ")
+        stripped = list(map(str.strip, text_list2))
+        if text_list[0] == "Ongoing:":
+            ongoing = stripped
+        elif text_list[0] == "Recent":
+            recent_deaths = stripped
+        else:
+            upcoming_deaths = stripped
 
     image_element = news_content.select_one('img')
     image_url = image_element.get('src') if image_element else None
     if image_url and image_url.startswith('//'):
         image_url = 'https:' + image_url
-        
+
+    image_desc_div = news_content.find('div', style=lambda s: s and 'font-size:94%' in s)
+    image_description = image_desc_div.get_text(strip=True) if image_desc_div else None
+    
     return {
-        "content": extracted_content,
-        "image_url": image_url
+        "content": news,
+        "ongoing": ongoing,
+        "recent_deaths": recent_deaths,
+        "upcomming_deaths": upcoming_deaths,
+        "image_url": image_url,
+        "image_description": image_description
     }
+
 
 def get_picture_data(soup: BeautifulSoup) -> Dict:
     h2_tag = None
