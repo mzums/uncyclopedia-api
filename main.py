@@ -2,7 +2,6 @@ from fastapi import FastAPI
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict
-from datetime import datetime
 
 app = FastAPI()
 
@@ -243,6 +242,107 @@ def get_anniversary_data(soup: BeautifulSoup) -> Dict:
         "image_url": image_url
     }
 
+def get_madrosc_data(soup: BeautifulSoup) -> Dict:
+    h2_tag = None
+    for h2 in soup.find_all('h2'):
+        if 'Mądrość ze słownika' in h2.get_text():
+            h2_tag = h2
+            break
+
+    if not h2_tag:
+        return {"error": "Could not find the 'Mądrość ze słownika' heading."}
+    
+    madrosc_content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    if not madrosc_content:
+        return {"error": "Could not find the content div for 'Mądrość ze słownika' section."}
+
+    word_element = madrosc_content.find('b')
+    word = word_element.get_text(strip=True)
+
+    definition = ""
+    for child in madrosc_content.children:
+        if child.name not in ['p', 'div', 'ul']:
+            text = child.get_text()
+            if text and text not in definition:
+                if definition.strip():
+                    definition += '\n' + text
+                else:
+                    definition += text
+
+    definition = definition.replace("Zobacz inne hasła", "").strip().removeprefix(f"{word} –  ")
+
+    return {
+        "word": word,
+        "definition": definition
+    }
+
+def get_grafika_data(soup: BeautifulSoup) -> Dict:
+    h2_tag = None
+    for h2 in soup.find_all('h2'):
+        if 'Losowa grafika' in h2.get_text():
+            h2_tag = h2
+            break
+
+    if not h2_tag:
+        return {"error": "Could not find the 'Losowa grafika' heading."}
+
+    grafika_content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    if not grafika_content:
+        return {"error": "Could not find the content div for 'Losowa grafika' section."}
+
+    grafika_element = grafika_content.select_one('img')
+    image_url = grafika_element.get('src') if grafika_element else None
+    if image_url and image_url.startswith('//'):
+        image_url = 'https:' + image_url
+
+    image_alt = grafika_element.get('alt') if grafika_element else None
+
+    author_div = grafika_content.find('div', style=lambda s: s and 'margin-top' in s)
+    author_link = author_div.find('a', title=lambda t: t and 'User:' in t or 'commons:User' in t) if author_div else None
+    author = author_link.get_text(strip=True) if author_link else "Autor unknown"
+
+    return {
+        "image_url": image_url,
+        "image_alt": image_alt,
+        "author": author
+    }
+
+def get_czy_nie_wiesz_data(soup: BeautifulSoup) -> Dict:
+    h2_tag = None
+    for h2 in soup.find_all('h2'):
+        if 'Czy nie wiesz' in h2.get_text():
+            h2_tag = h2
+            break
+
+    if not h2_tag:
+        return {"error": "Could not find the 'Czy nie wiesz...' heading."}
+
+    content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    if not content:
+        return {"error": "Could not find the content div for 'Czy nie wiesz...' section."}
+    
+    res = {
+        "najnowsze": [],
+        "archiwa": []
+    }
+
+    najnowsze_header = content.find(string=lambda s: s and "Z najnowszych artykułów:" in s)
+    if najnowsze_header:
+        najnowsze_list = najnowsze_header.find_next('ul')
+        if najnowsze_list:
+            for li in najnowsze_list.find_all('li'):
+                res["najnowsze"].append(li.get_text())
+
+    archiwa_header = content.find(string=lambda s: s and "…i z naszych przepastnych archiwów:" in s)
+    if archiwa_header:
+        archiwa_list = archiwa_header.find_next('ul')
+        if archiwa_list:
+            for li in archiwa_list.find_all('li'):
+                res["archiwa"].append(li.get_text())
+
+    return res
+
+
 @app.get("/")
 def read_root():
     return {"message": "Uncyclopedia API is running. Check /docs for endpoints."}
@@ -288,3 +388,27 @@ def get_anniversaries():
         anniversaries = get_anniversary_data(soup)
         if anniversaries:
             return anniversaries
+
+@app.get("/madrosc")
+def get_madrosc():
+    soup = get_uncyclopedia_page("https://nonsa.pl/wiki/Strona_g%C5%82%C3%B3wna")
+    if soup:
+        madrosc = get_madrosc_data(soup)
+        if madrosc:
+            return madrosc
+        
+@app.get("/losowa-grafika")
+def get_grafika():
+    soup = get_uncyclopedia_page("https://nonsa.pl/wiki/Strona_g%C5%82%C3%B3wna")
+    if soup:
+        grafika = get_grafika_data(soup)
+        if grafika:
+            return grafika
+        
+@app.get("/czy-nie-wiesz")
+def get_czy_nie_wiesz():
+    soup = get_uncyclopedia_page("https://nonsa.pl/wiki/Strona_g%C5%82%C3%B3wna")
+    if soup:
+        czy_nie_wiesz = get_czy_nie_wiesz_data(soup)
+        if czy_nie_wiesz:
+            return czy_nie_wiesz
