@@ -269,7 +269,7 @@ def get_madrosc_data(soup: BeautifulSoup) -> Dict:
                 else:
                     definition += text
 
-    definition = definition.replace("Zobacz inne hasła", "").strip().removeprefix(f"{word} –  ")
+    definition = definition.replace("Zobacz inne hasła", "").replace(f"{word} – ", "").strip()
 
     return {
         "word": word,
@@ -292,13 +292,16 @@ def get_grafika_data(soup: BeautifulSoup) -> Dict:
 
     grafika_element = grafika_content.select_one('img')
     image_url = grafika_element.get('src') if grafika_element else None
+    if not "nonsa.pl" in image_url:
+        image_url = "https://nonsa.pl" + image_url if image_url else None
+
     if image_url and image_url.startswith('//'):
         image_url = 'https:' + image_url
 
     image_alt = grafika_element.get('alt') if grafika_element else None
 
     author_div = grafika_content.find('div', style=lambda s: s and 'margin-top' in s)
-    author_link = author_div.find('a', title=lambda t: t and 'User:' in t or 'commons:User' in t) if author_div else None
+    author_link = author_div.find('a', title=lambda t: t and 'User:' in t or 'commons:User' in t or 'Użytkownik:' in t) if author_div else None
     author = author_link.get_text(strip=True) if author_link else "Autor unknown"
 
     return {
@@ -342,6 +345,57 @@ def get_czy_nie_wiesz_data(soup: BeautifulSoup) -> Dict:
 
     return res
 
+def get_swieto_data(soup: BeautifulSoup) -> Dict:
+    h2_tag = None
+    for h2 in soup.find_all('h2'):
+        if 'Święto na dziś' in h2.get_text():
+            h2_tag = h2
+            break
+
+    if not h2_tag:
+        return {"error": "Could not find the 'Święto na dziś' heading."}
+
+    content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    if not content:
+        return {"error": "Could not find the content div for 'Święto na dziś' section."}
+    
+    title_content = content.select_one('p').get_text()
+
+    subtitle_p = content.find_all('p')[1] if len(content.find_all('p')) > 1 else None
+    subtitle_content = subtitle_p.get_text() if subtitle_p else ""
+
+    picture = content.select_one('img')
+    image_url = picture.get('src') if picture else None
+    if not "nonsa.pl" in image_url:
+        image_url = "https://nonsa.pl" + image_url if image_url else None
+
+    dates = {}
+    for i in content.find_all('li'):
+        date_text = i.get_text()
+        date = date_text.split(' – ')[0]
+        event = "".join(date_text.split(' – ')[1:])
+        dates[date] = event
+
+    return {
+        "title": title_content,
+        "subtitle": subtitle_content,
+        "events": dates,
+        "image_url": image_url
+    }
+
+def get_non_news_data(soup: BeautifulSoup) -> Dict:
+    h2_tag = None
+    for h2 in soup.find_all('h2'):
+        if 'NonNews' in h2.get_text():
+            h2_tag = h2
+            break
+
+    if not h2_tag:
+        return {"error": "Could not find the 'NonNews' heading."}
+
+    content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    if not content:
+        return {"error": "Could not find the content div for 'NonNews' section."}
 
 @app.get("/")
 def read_root():
@@ -412,3 +466,19 @@ def get_czy_nie_wiesz():
         czy_nie_wiesz = get_czy_nie_wiesz_data(soup)
         if czy_nie_wiesz:
             return czy_nie_wiesz
+        
+@app.get("/swieto")
+def get_swieto():
+    soup = get_uncyclopedia_page("https://nonsa.pl/wiki/Strona_g%C5%82%C3%B3wna")
+    if soup:
+        swieto = get_swieto_data(soup)
+        if swieto:
+            return swieto
+
+@app.get("/non-news")
+def get_non_news():
+    soup = get_uncyclopedia_page("https://nonsa.pl/wiki/Strona_g%C5%82%C3%B3wna")
+    if soup:
+        non_news = get_non_news_data(soup)
+        if non_news:
+            return non_news
