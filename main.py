@@ -396,6 +396,44 @@ def get_non_news_data(soup: BeautifulSoup) -> Dict:
     content = h2_tag.find_next_sibling('div', class_='panelcss-content')
     if not content:
         return {"error": "Could not find the content div for 'NonNews' section."}
+    
+    non_news = {}
+    non_news["najnowsze"] = []
+    non_news["archiwum"] = []
+    current = "najnowsze"
+    last_date = None
+    last_date_content = []
+    for item in content.children:
+        if item.name == 'p':
+            if item.select_one('b'):
+                current = "najnowsze" if "Najnowsze" in item.select_one('b').get_text() else "archiwum"
+            if item:
+                a_tag = item.select_one('a')
+                last_date_content = []
+                if a_tag:
+                    date = a_tag.get_text()
+                else:
+                    continue
+                last_date = date
+        elif item.name == 'ul':
+            print("ul")
+            if last_date:
+                for item2 in item.find_all('li'):
+                    text = item2.select_one('a').get_text()
+                    if text:
+                        if current == "najnowsze" and len(non_news[current]) > 0 and non_news[current][-1]["date"] == last_date:
+                            non_news[current][-1]["content"].append(text)
+                        else:
+                            last_date_content.append(text)
+                            if current == "najnowsze":
+                                non_news[current].append({
+                                    "date": last_date,
+                                    "content": last_date_content
+                                })
+
+    non_news[current].append(last_date_content)
+
+    return non_news
 
 @app.get("/")
 def read_root():
