@@ -14,20 +14,38 @@ def get_uncyclopedia_page(url: str):
         print(f"Error fetching page: {e}")
         return None
 
-def get_featured_article_data(soup: BeautifulSoup) -> Dict:
-    featured_section = soup.select_one('.mp-panel.mp-green .mp-content')
-    if not featured_section:
-        return {}
+def helper(soup: BeautifulSoup, section_name: str, class_name: str) -> bool:
+    h2_tag = None
+    for h2 in soup.find_all('h2'):
+        if section_name in h2.get_text():
+            h2_tag = h2
+            break
+            
+    if not h2_tag:
+        print(f"Error: Could not find the '{section_name}' heading.")
+        return []
 
-    title_element = featured_section.select_one('a')
+    featured_article_content = h2_tag.find_next_sibling('div', class_=class_name)
+    if not featured_article_content:
+        print(f"Error: Could not find the content div for '{section_name}' section.")
+        return []
+    
+    return featured_article_content
+
+def get_featured_article_data(soup: BeautifulSoup) -> Dict:
+    featured_article_content = helper(soup, 'Featured article', 'mp-content')
+    if not featured_article_content:
+        return {"error": "Could not find the featured article content."}
+
+    title_element = featured_article_content.select_one('a')
     title = title_element.get('title', 'Title not found') if title_element else 'Title not found'
 
-    image_element = featured_section.select_one('img')
+    image_element = featured_article_content.select_one('img')
     image_url = image_element.get('src') if image_element else None
     if image_url and image_url.startswith('//'):
         image_url = 'https:' + image_url
 
-    paragraphs = featured_section.find_all('p')
+    paragraphs = featured_article_content.find_all('p')
     description_parts = []
 
     for p in paragraphs:
@@ -37,7 +55,7 @@ def get_featured_article_data(soup: BeautifulSoup) -> Dict:
     description = '\n'.join(description_parts)
     description = description.replace(" .", ".").replace(" ,", ",").replace(" !", "!").replace(" ?", "?").replace("( ", "(").replace(" )", ")")
     
-    other_text_container = featured_section.find('div', class_='mw-body') or featured_section
+    other_text_container = featured_article_content.find('div', class_='mw-body') or featured_article_content
     if other_text_container:
         for child in other_text_container.children:
             if child.name not in ['p', 'div', 'ul']:
@@ -60,20 +78,9 @@ def get_featured_article_data(soup: BeautifulSoup) -> Dict:
     }
 
 def get_did_you_know_facts(soup: BeautifulSoup) -> Dict[str, List[List[str]]]:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'Did you know...' in h2.get_text():
-            h2_tag = h2
-            break
-            
-    if not h2_tag:
-        print("Error: Could not find the 'Did you know...' heading.")
-        return []
-
-    did_you_know_content = h2_tag.find_next_sibling('div', class_='mp-content')
+    did_you_know_content = helper(soup, 'Did you know', 'mp-content')
     if not did_you_know_content:
-        print("Error: Could not find the content div for 'Did you know...' section.")
-        return []
+        return {"error": "Could not find the 'Did you know...' section."}
 
     list_items = did_you_know_content.find_all('li')
 
@@ -93,21 +100,10 @@ def get_did_you_know_facts(soup: BeautifulSoup) -> Dict[str, List[List[str]]]:
     }
 
 def get_news_data(soup: BeautifulSoup) -> Dict[str, List[List[str]]]:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'In the news' in h2.get_text():
-            h2_tag = h2
-            break
-            
-    if not h2_tag:
-        print("Error: Could not find the 'In the news' heading.")
-        return {}
-    
-    news_content = h2_tag.find_next_sibling('div', class_='mp-content')
+    news_content = helper(soup, 'In the news', 'mp-content')
     if not news_content:
-        print("Error: Could not find the content div for 'In the news' section.")
-        return {}
-    
+        return {"error": "Could not find the 'In the news' section."}
+
     news = news_content.find_all('li')
     news = [item.get_text().split('\n')[0] for item in news]
 
@@ -150,19 +146,10 @@ def get_news_data(soup: BeautifulSoup) -> Dict[str, List[List[str]]]:
 
 
 def get_picture_data(soup: BeautifulSoup) -> Dict:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'Picture of the day' in h2.get_text():
-            h2_tag = h2
-            break
-
-    if not h2_tag:
-        return {}
-    
-    picture_content = h2_tag.find_next_sibling('div', class_='mp-content')
+    picture_content = helper(soup, 'Picture of the day', 'mp-content')
     if not picture_content:
-        return {}
-    
+        return {"error": "Could not find the content div for 'Picture of the day' section."}
+
     all_td_elements = picture_content.find_all('td')
 
     second_td_element = None
@@ -197,16 +184,7 @@ def get_picture_data(soup: BeautifulSoup) -> Dict:
     return picture_data
 
 def get_anniversary_data(soup: BeautifulSoup) -> Dict:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if "On this day" in h2.get_text():
-            h2_tag = h2
-            break
-
-    if not h2_tag:
-        return {"error": "Could not find the 'On this day' heading."}
-    
-    content_div = h2_tag.find_next_sibling('div', class_='mp-content')
+    content_div = helper(soup, 'On this day', 'mp-content')
     if not content_div:
         return {"error": "Could not find the content div for 'On this day' section."}
 
@@ -243,16 +221,7 @@ def get_anniversary_data(soup: BeautifulSoup) -> Dict:
     }
 
 def get_madrosc_data(soup: BeautifulSoup) -> Dict:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'Mądrość ze słownika' in h2.get_text():
-            h2_tag = h2
-            break
-
-    if not h2_tag:
-        return {"error": "Could not find the 'Mądrość ze słownika' heading."}
-    
-    madrosc_content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    madrosc_content = helper(soup, 'Mądrość ze słownika', 'panelcss-content')
     if not madrosc_content:
         return {"error": "Could not find the content div for 'Mądrość ze słownika' section."}
 
@@ -277,22 +246,13 @@ def get_madrosc_data(soup: BeautifulSoup) -> Dict:
     }
 
 def get_grafika_data(soup: BeautifulSoup) -> Dict:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'Losowa grafika' in h2.get_text():
-            h2_tag = h2
-            break
-
-    if not h2_tag:
-        return {"error": "Could not find the 'Losowa grafika' heading."}
-
-    grafika_content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    grafika_content = helper(soup, 'Losowa grafika', 'panelcss-content')
     if not grafika_content:
         return {"error": "Could not find the content div for 'Losowa grafika' section."}
 
     grafika_element = grafika_content.select_one('img')
     image_url = grafika_element.get('src') if grafika_element else None
-    if not "nonsa.pl" in image_url:
+    if not "nonsa.pl" in image_url and not "wikimedia" in image_url:
         image_url = "https://nonsa.pl" + image_url if image_url else None
 
     if image_url and image_url.startswith('//'):
@@ -301,8 +261,17 @@ def get_grafika_data(soup: BeautifulSoup) -> Dict:
     image_alt = grafika_element.get('alt') if grafika_element else None
 
     author_div = grafika_content.find('div', style=lambda s: s and 'margin-top' in s)
-    author_link = author_div.find('a', title=lambda t: t and 'User:' in t or 'commons:User' in t or 'Użytkownik:' in t) if author_div else None
-    author = author_link.get_text(strip=True) if author_link else "Autor unknown"
+    if author_div:
+        if author_div.find('a', title=lambda t: t and ('User:' in t or 'commons:User' in t or 'Użytkownik:' in t)):
+            author_link = author_div.find('a', title=lambda t: t and 'User:' in t or 'commons:User' in t or 'Użytkownik:' in t) if author_div else None
+            author = author_link.get_text(strip=True)
+        else:
+            print(grafika_content)
+            author_link = author_div.find('i')
+            author = author_link.get_text(strip=True).removeprefix("Autor:")
+    else:
+        author_link = None
+        author = "Autor unknown"
 
     return {
         "image_url": image_url,
@@ -311,19 +280,10 @@ def get_grafika_data(soup: BeautifulSoup) -> Dict:
     }
 
 def get_czy_nie_wiesz_data(soup: BeautifulSoup) -> Dict:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'Czy nie wiesz' in h2.get_text():
-            h2_tag = h2
-            break
-
-    if not h2_tag:
-        return {"error": "Could not find the 'Czy nie wiesz...' heading."}
-
-    content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    content = helper(soup, 'Czy nie wiesz', 'panelcss-content')
     if not content:
-        return {"error": "Could not find the content div for 'Czy nie wiesz...' section."}
-    
+        return {"error": "Could not find the content div for 'Czy nie wiesz' section."}
+
     res = {
         "najnowsze": [],
         "archiwa": []
@@ -346,16 +306,7 @@ def get_czy_nie_wiesz_data(soup: BeautifulSoup) -> Dict:
     return res
 
 def get_swieto_data(soup: BeautifulSoup) -> Dict:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'Święto na dziś' in h2.get_text():
-            h2_tag = h2
-            break
-
-    if not h2_tag:
-        return {"error": "Could not find the 'Święto na dziś' heading."}
-
-    content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    content = helper(soup, 'Święto na dziś', 'panelcss-content')
     if not content:
         return {"error": "Could not find the content div for 'Święto na dziś' section."}
     
@@ -366,7 +317,7 @@ def get_swieto_data(soup: BeautifulSoup) -> Dict:
 
     picture = content.select_one('img')
     image_url = picture.get('src') if picture else None
-    if not "nonsa.pl" in image_url:
+    if not "nonsa.pl" in image_url and not "wikimedia" in image_url:
         image_url = "https://nonsa.pl" + image_url if image_url else None
 
     dates = {}
@@ -384,16 +335,7 @@ def get_swieto_data(soup: BeautifulSoup) -> Dict:
     }
 
 def get_non_news_data(soup: BeautifulSoup) -> Dict:
-    h2_tag = None
-    for h2 in soup.find_all('h2'):
-        if 'NonNews' in h2.get_text():
-            h2_tag = h2
-            break
-
-    if not h2_tag:
-        return {"error": "Could not find the 'NonNews' heading."}
-
-    content = h2_tag.find_next_sibling('div', class_='panelcss-content')
+    content = helper(soup, 'NonNews', 'panelcss-content')
     if not content:
         return {"error": "Could not find the content div for 'NonNews' section."}
     
@@ -434,6 +376,35 @@ def get_non_news_data(soup: BeautifulSoup) -> Dict:
     non_news[current].append(last_date_content)
 
     return non_news
+
+def get_artykul_na_medal_data(soup: BeautifulSoup) -> Dict:
+    content = helper(soup, 'Artykuł na medal', 'panelcss-content')
+    if not content:
+        return {"error": "Could not find the content div for 'Artykuł na medal' section."}
+
+    article_title = content.select_one('p').select_one('b').get_text(strip=True)
+    
+    paragraphs = content.find_all('p')
+    description_parts = []
+    
+    for p in paragraphs:
+        text = p.get_text(separator=' ')
+        description_parts.append(text.replace(" .", ".").replace(" ,", ",").replace(" !", "!").replace(" ?", "?").replace("( ", "(").replace(" )", ")"))
+
+    description = '\n'.join(description_parts).rstrip()
+    
+    image_element = content.select_one('img')
+    image_url = image_element.get('src') if image_element else None
+    if image_url and not "nonsa.pl" in image_url and not "wikimedia" in image_url:
+        image_url = "https://nonsa.pl" + image_url if image_url else None
+    if image_url and image_url.startswith('//'):
+        image_url = 'https:' + image_url
+
+    return {
+        "title": article_title,
+        "description": description,
+        "image_url": image_url
+    }
 
 @app.get("/")
 def read_root():
@@ -520,3 +491,11 @@ def get_non_news():
         non_news = get_non_news_data(soup)
         if non_news:
             return non_news
+        
+@app.get("/artykul-na-medal")
+def get_artykul_na_medal():
+    soup = get_uncyclopedia_page("https://nonsa.pl/wiki/Strona_g%C5%82%C3%B3wna")
+    if soup:
+        artykul_na_medal = get_artykul_na_medal_data(soup)
+        if artykul_na_medal:
+            return artykul_na_medal
