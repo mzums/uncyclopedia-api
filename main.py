@@ -33,7 +33,7 @@ def helper(soup: BeautifulSoup, section_name: str, class_name: str) -> bool:
     return featured_article_content
 
 def get_featured_article_data(soup: BeautifulSoup) -> Dict:
-    featured_article_content = helper(soup, 'Featured article', 'mp-content')
+    featured_article_content = helper(soup, 'featured article', 'mp-content')
     if not featured_article_content:
         return {"error": "Could not find the featured article content."}
 
@@ -183,7 +183,7 @@ def get_picture_data(soup: BeautifulSoup) -> Dict:
 
     return picture_data
 
-def get_anniversary_data(soup: BeautifulSoup) -> Dict:
+def get_on_this_day_data(soup: BeautifulSoup) -> Dict:
     content_div = helper(soup, 'On this day', 'mp-content')
     if not content_div:
         return {"error": "Could not find the content div for 'On this day' section."}
@@ -444,13 +444,13 @@ def get_picture():
         if picture_data:
             return picture_data
         
-@app.get("/anniversaries")
-def get_anniversaries():
+@app.get("/on-this-day")
+def get_on_this_day():
     soup = get_uncyclopedia_page("https://en.uncyclopedia.co/wiki/Main_Page")
     if soup:
-        anniversaries = get_anniversary_data(soup)
-        if anniversaries:
-            return anniversaries
+        on_this_day = get_on_this_day_data(soup)
+        if on_this_day:
+            return on_this_day
 
 @app.get("/madrosc")
 def get_madrosc():
