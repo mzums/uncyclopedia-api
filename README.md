@@ -68,5 +68,5 @@ Fastapi API for Uncyclopedia and it's Polish alternative - Nonsensopedia
 3. **install** requirements  
     `pip install -r requirements.txt`
 4. **run** the app with uvicorn  
-    ``uvicorn main:app --reload``
+    ``uvicorn src.main:app --reload``
 5. **use** the api on `http://127.0.0.1:8000`
